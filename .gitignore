@@ -1,7 +1,18 @@
+# folders 
+input_videos/
+output_videos/
+debug_output/
+
+# pt files
+*.pt
+*.pkl
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+.DS_Store
+.vs_code/
 
 # C extensions
 *.so

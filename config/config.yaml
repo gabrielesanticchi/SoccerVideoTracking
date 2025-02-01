@@ -1,0 +1,45 @@
+# Configuration for Camera Movement Estimation
+# ----------------------------------------------
+
+# Preprocessing settings
+input_video:
+  frame_rate_reduction: 5  # Reduce frame rate by this factor
+  resize_factor: 0.5        # Resize factor for input video
+
+# ----------------------------------------------
+# Camera movement estimation settings
+camera_movement:
+  # Core tracking parameters
+  minimum_distance: 5            # Minimum distance to consider as movement
+  
+  # Feature detection parameters
+  features:
+    max_corners: 25             # Maximum number of corners to detect
+    quality_level: 0.3          # Quality threshold for corner detection
+    min_distance: 3             # Minimum distance between corners
+    block_size: 7              # Size of block for corner detection
+    mask:
+      left_border: 20          # Width of left border mask
+      right_border: [900, 1050] # Start and end of right border mask
+  
+  # Lucas-Kanade optical flow parameters
+  lk_params:
+    win_size: [15, 15]         # Size of search window
+    max_level: 2               # Maximum pyramid level
+    max_count: 10              # Maximum iteration count
+    epsilon: 0.03              # Minimum accuracy threshold
+  
+  # Caching and visualization
+  read_from_stub: false        # Whether to read from cache
+  stub_path: null             # Auto-generated if null
+  save_visualization: true    # Save visualization output
+
+# ----------------------------------------------
+# Pitch line detection settings
+pitch_line_detector:
+  canny_low: 50                                # Canny edge detection low threshold
+  canny_high: 150                              # Canny edge detection high threshold
+  hough_threshold: 50                          # Hough transform threshold
+  min_line_length: 100                         # Minimum line length for Hough transform
+  max_line_gap: 10                             # Maximum gap between lines for Hough transform
+  binary_threshold: 200                        # Binary threshold for white line detection
