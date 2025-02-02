@@ -4,42 +4,46 @@
 # Preprocessing settings
 input_video:
   frame_rate_reduction: 5  # Reduce frame rate by this factor
-  resize_factor: 0.5        # Resize factor for input video
+  resize_factor: 0.2       # Resize factor for input video
 
 # ----------------------------------------------
 # Camera movement estimation settings
 camera_movement:
-  # Core tracking parameters
-  minimum_distance: 5            # Minimum distance to consider as movement
-  
-  # Feature detection parameters
+  minimum_distance: 5
   features:
-    max_corners: 25             # Maximum number of corners to detect
-    quality_level: 0.3          # Quality threshold for corner detection
-    min_distance: 3             # Minimum distance between corners
-    block_size: 7              # Size of block for corner detection
+    max_corners: 100
+    quality_level: 0.3
+    min_distance: 3
+    block_size: 7
     mask:
-      left_border: 20          # Width of left border mask
-      right_border: [900, 1050] # Start and end of right border mask
+      left_border: 20
+      right_border: [900, 1050]
   
-  # Lucas-Kanade optical flow parameters
+  # lukas_kanade_params:
   lk_params:
-    win_size: [15, 15]         # Size of search window
-    max_level: 2               # Maximum pyramid level
-    max_count: 10              # Maximum iteration count
-    epsilon: 0.03              # Minimum accuracy threshold
-  
-  # Caching and visualization
-  read_from_stub: false        # Whether to read from cache
-  stub_path: null             # Auto-generated if null
-  save_visualization: true    # Save visualization output
+    win_size: [15, 15]
+    max_level: 2
+    max_count: 10
+    epsilon: 0.03
+  read_from_stub: false
+  stub_path: null
+  save_visualization: true
+
+  # Estimation method 
+  estimation_method: "sift"    # or "optical_flow"
+  smoothing:
+    enabled: true
+    window_size: 5
 
 # ----------------------------------------------
 # Pitch line detection settings
 pitch_line_detector:
-  canny_low: 50                                # Canny edge detection low threshold
-  canny_high: 150                              # Canny edge detection high threshold
-  hough_threshold: 50                          # Hough transform threshold
-  min_line_length: 100                         # Minimum line length for Hough transform
-  max_line_gap: 10                             # Maximum gap between lines for Hough transform
-  binary_threshold: 200                        # Binary threshold for white line detection
+  detection_method: "combined"   # Options: "canny", "adaptive", "sobel", "combined"
+  canny_low: 50                  # Canny edge detection low threshold
+  canny_high: 150                # Canny edge detection high threshold
+  hough_threshold: 50            # Hough transform threshold
+  min_line_length: 100           # Minimum line length for Hough transform
+  max_line_gap: 10               # Maximum gap between lines for Hough transform
+  binary_threshold: 200          # Binary threshold for white line detection
+  adaptive_block_size: 11        # Block size for adaptive thresholding (must be odd)
+  adaptive_C: 2                  # Constant subtracted in adaptive thresholding

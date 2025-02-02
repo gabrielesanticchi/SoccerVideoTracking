@@ -18,7 +18,7 @@ class SoccerAnalysisPipeline:
         Initialize the analysis pipeline.
         
         Args:
-            config_path: Path to the configuration YAML file
+            config_path: Path to the configuration YAML filef
         """
         # Load configuration
         self.config = ConfigurationLoader(config_path).load_config()
@@ -111,23 +111,23 @@ class SoccerAnalysisPipeline:
         tracks = self.tracker.get_object_tracks(
             frames,
             read_from_stub=True,
-            stub_path=f'stubs/{self.video_name}_track_stubs.pkl'
+            stub_path=f"stubs/{self.video_name}_track_stubs_{self.config['input_video']['frame_rate_reduction']}_{self.config['input_video']['resize_factor']}.pkl"
         )
         self.tracker.add_position_to_tracks(tracks)
         
-        # Process pitch lines for each frame
-        # pitch_lines = []
-        # for frame in frames:
-        #     line_mask = self.pitch_detector.create_line_mask(frame)
-        #     pitch_lines.append(line_mask)
+        # # Process pitch lines for each frame
+        pitch_lines = []
+        for frame in frames:
+            line_mask = self.pitch_detector.create_line_mask(frame)
+            pitch_lines.append(line_mask)
             
         # Estimate camera movement
         camera_movement = self.camera_estimator.get_camera_movement(frames)
         
         return {
             'tracks': tracks,
-            # 'pitch_lines': pitch_lines,
-            'pitch_lines': [],
+            'pitch_lines': pitch_lines,
+            # 'pitch_lines': [],
             'camera_movement': camera_movement
         }
     
@@ -154,16 +154,11 @@ class SoccerAnalysisPipeline:
             pitch_vis_frames.append(combined)
             
         # Save pitch line visualization
-        VideoIO.save_gif(
+        VideoIO.save_media(
             pitch_vis_frames,
-            self.output_dir / f"{self.video_name}_pitch_lines.gif",
-            duration=100
+            self.output_dir / f"{self.video_name}_pitch_lines", fps=30, duration=100, formats=['gif']
         )
-        VideoIO.save_video(
-            pitch_vis_frames,
-            self.output_dir / f"{self.video_name}_pitch_lines.mp4",
-            fps=30
-        )
+        
         
         # Generate camera movement visualization
         movement_frames = self.camera_estimator.draw_camera_movement(
@@ -181,16 +176,11 @@ class SoccerAnalysisPipeline:
             camera_vis_frames.append(combined)
             
         # Save camera movement visualization
-        VideoIO.save_gif(
+        VideoIO.save_media(
             camera_vis_frames,
-            self.output_dir / f"{self.video_name}_camera_movement.gif",
-            duration=100
+            self.output_dir / f"{self.video_name}_camera_movement", fps=30, duration=100, formats=['gif']
         )
-        VideoIO.save_video(
-            camera_vis_frames,
-            self.output_dir / f"{self.video_name}_camera_movement.mp4",
-            fps=30
-        )
+        
 
 def main():
     """Main entry point for the soccer analysis pipeline."""

@@ -3,6 +3,8 @@ import numpy as np
 from PIL import Image
 import os
 
+from pathlib import Path
+
 class VideoIO:
     """
     A utility class for handling video and image sequence I/O operations.
@@ -81,71 +83,54 @@ class VideoIO:
         return frames
 
     @staticmethod
-    def save_video(frames, output_path, fps=30):
+    def save_media(frames, output_path, fps=30, duration=100, formats=['mp4']):
         """
-        Save a sequence of frames as a video file.
+        Save a sequence of frames as a video file or an animated GIF.
         
         Args:
             frames: List of frames to save
-            output_path: Path where the video will be saved
-            fps: Frames per second for the output video
+            output_path: Path where the media will be saved
+            fps: Frames per second for the output video (used if format is 'mp4')
+            duration: Duration for each frame in milliseconds (used if format is 'gif')
+            formats: List of formats to save the media ('mp4', 'gif')
         """
         if not frames:
             print("No frames to save!")
             return
             
+        # Convert output_path to Path object
+        output_path = Path(output_path)
+        
         # Create output directory if it doesn't exist
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        os.makedirs(output_path.parent, exist_ok=True)
         
-        # Get dimensions from first frame
-        height, width = frames[0].shape[:2]
-        
-        # Initialize video writer
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-        
-        # Write frames
-        for frame in frames:
-            out.write(frame)
+        for format in formats:
+            if format == 'mp4':
+                # Save as video
+                height, width = frames[0].shape[:2]
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(str(output_path.with_suffix('.mp4')), fourcc, fps, (width, height))
+                for frame in frames:
+                    out.write(frame)
+                out.release()
+                print(f"Saved video to {output_path.with_suffix('.mp4')}")
             
-        out.release()
-        print(f"Saved video to {output_path}")
-
-    @staticmethod
-    def save_gif(frames, output_path, duration=100):
-        """
-        Save a sequence of frames as an animated GIF.
-        
-        Args:
-            frames: List of frames to save
-            output_path: Path where the GIF will be saved
-            duration: Duration for each frame in milliseconds
-        """
-        if not frames:
-            print("No frames to save!")
-            return
-            
-        # Create output directory if it doesn't exist
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-        # Convert frames to PIL images
-        pil_frames = []
-        for frame in frames:
-            # Convert to RGB for PIL
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(rgb_frame)
-            
-            # Convert to P mode with adaptive palette for better GIF compression
-            pil_image = pil_image.convert('P', palette=Image.ADAPTIVE, colors=256)
-            pil_frames.append(pil_image)
-        
-        # Save as GIF
-        pil_frames[0].save(
-            output_path,
-            save_all=True,
-            append_images=pil_frames[1:],
-            duration=duration,
-            loop=0,
-            optimize=True
-        )
-        print(f"Saved GIF to {output_path}")
+            elif format == 'gif':
+                # Save as GIF
+                pil_frames = []
+                for frame in frames:
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    pil_image = Image.fromarray(rgb_frame)
+                    pil_image = pil_image.convert('P', palette=Image.ADAPTIVE, colors=256)
+                    pil_frames.append(pil_image)
+                pil_frames[0].save(
+                    str(output_path.with_suffix('.gif')),
+                    save_all=True,
+                    append_images=pil_frames[1:],
+                    duration=duration,
+                    loop=0,
+                    optimize=True
+                )
+                print(f"Saved GIF to {output_path.with_suffix('.gif')}")
+            else:
+                print(f"Unsupported format: {format}")
