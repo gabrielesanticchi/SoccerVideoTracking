@@ -119,7 +119,7 @@ class Tracker:
             endAngle=235,
             color = color,
             thickness=2,
-            lineType=cv2.LINE_4
+            lineType=cv2.lines_4
         )
 
         rectangle_width = 40

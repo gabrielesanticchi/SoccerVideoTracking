@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 
 
-class PitchLineDetector:
+class BasicPitchLineDetector:
     """
     Pitch line detector that supports multiple edge detection methods.
     The choice of method is configured via a parameter in the configuration.
@@ -19,8 +19,8 @@ class PitchLineDetector:
                 - canny_low: Lower threshold for Canny edge detection
                 - canny_high: Higher threshold for Canny edge detection
                 - hough_threshold: Threshold for Hough line detection
-                - min_line_length: Minimum line length for Hough detection
-                - max_line_gap: Maximum gap between line segments
+                - min_lines_length: Minimum line length for Hough detection
+                - max_lines_gap: Maximum gap between line segments
                 - binary_threshold: Threshold for binary image conversion (for fixed thresholding)
                 - adaptive_block_size: Block size for adaptive thresholding (must be odd)
                 - adaptive_C: Constant subtracted in adaptive thresholding
@@ -31,8 +31,8 @@ class PitchLineDetector:
             'canny_low': 50,
             'canny_high': 150,
             'hough_threshold': 50,
-            'min_line_length': 100,
-            'max_line_gap': 10,
+            'min_lines_length': 100,
+            'max_lines_gap': 10,
             'binary_threshold': 200,
             'adaptive_block_size': 11,  # Must be odd
             'adaptive_C': 2
@@ -47,7 +47,7 @@ class PitchLineDetector:
         self.horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 1))
         self.vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 25))
 
-    def create_line_mask(self, frame: np.ndarray) -> np.ndarray:
+    def create_lines_mask(self, frame: np.ndarray) -> np.ndarray:
         """
         Create a binary mask highlighting the pitch lines based on the selected detection method.
 
@@ -58,20 +58,20 @@ class PitchLineDetector:
             Binary mask with detected pitch lines.
         """
         if self.detection_method == 'canny':
-            return self.create_line_mask_canny(frame)
+            return self.create_lines_mask_canny(frame)
         elif self.detection_method == 'adaptive':
-            return self.create_line_mask_adaptive(frame)
+            return self.create_lines_mask_adaptive(frame)
         elif self.detection_method == 'sobel':
-            return self.create_line_mask_sobel(frame)
+            return self.create_lines_mask_sobel(frame)
         elif self.detection_method == 'combined':
-            mask_canny = self.create_line_mask_canny(frame)
-            mask_sobel = self.create_line_mask_sobel(frame)
+            mask_canny = self.create_lines_mask_canny(frame)
+            mask_sobel = self.create_lines_mask_sobel(frame)
             combined_mask = cv2.bitwise_or(mask_canny, mask_sobel)
             return combined_mask
         else:
             raise ValueError(f"Invalid detection_method: {self.detection_method}")
 
-    def create_line_mask_canny(self, frame: np.ndarray) -> np.ndarray:
+    def create_lines_mask_canny(self, frame: np.ndarray) -> np.ndarray:
         """
         Create line mask using the traditional Canny edge detection approach.
 
@@ -99,7 +99,7 @@ class PitchLineDetector:
         edges = cv2.Canny(combined, self.config['canny_low'], self.config['canny_high'])
         return edges
 
-    def create_line_mask_adaptive(self, frame: np.ndarray) -> np.ndarray:
+    def create_lines_mask_adaptive(self, frame: np.ndarray) -> np.ndarray:
         """
         Create line mask using adaptive thresholding to account for varying lighting conditions.
 
@@ -128,7 +128,7 @@ class PitchLineDetector:
         edges = cv2.Canny(combined, self.config['canny_low'], self.config['canny_high'])
         return edges
 
-    def create_line_mask_sobel(self, frame: np.ndarray) -> np.ndarray:
+    def create_lines_mask_sobel(self, frame: np.ndarray) -> np.ndarray:
         """
         Create line mask using the Sobel operator to detect gradient edges.
 
@@ -166,20 +166,20 @@ class PitchLineDetector:
                 - List of detected line segments as [x1, y1, x2, y2]
                 - The line mask used for detection.
         """
-        line_mask = self.create_line_mask(frame)
+        lines_mask = self.create_lines_mask(frame)
 
         # Detect lines using probabilistic Hough transform
         lines = cv2.HoughLinesP(
-            line_mask,
+            lines_mask,
             rho=1,
             theta=np.pi / 180,
             threshold=self.config['hough_threshold'],
-            minLineLength=self.config['min_line_length'],
-            maxLineGap=self.config['max_line_gap']
+            minLineLength=self.config['min_lines_length'],
+            maxLineGap=self.config['max_lines_gap']
         )
 
         if lines is None:
-            return [], line_mask
+            return [], lines_mask
 
         # Filter lines based on angle (keep near-horizontal or near-vertical)
         filtered_lines: List[List[int]] = []
@@ -188,7 +188,7 @@ class PitchLineDetector:
             angle = np.abs(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
             if angle < 10 or (80 < angle < 100):
                 filtered_lines.append([x1, y1, x2, y2])
-        return filtered_lines, line_mask
+        return filtered_lines, lines_mask
 
     def draw_detected_lines(self, frame: np.ndarray, lines: List[List[int]]) -> np.ndarray:
         """
@@ -217,12 +217,12 @@ class PitchLineDetector:
         Returns:
             Binary mask for feature detection.
         """
-        lines, line_mask = self.detect_lines(frame)
-        features_mask = np.zeros_like(line_mask)
+        lines, lines_mask = self.detect_lines(frame)
+        features_mask = np.zeros_like(lines_mask)
 
         # Dilate the line mask to cover regions around detected lines
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        features_mask = cv2.dilate(line_mask, kernel, iterations=2)
+        features_mask = cv2.dilate(lines_mask, kernel, iterations=2)
 
         # Enhance intersections by adding extra weight where near-perpendicular lines meet
         for i, line1 in enumerate(lines):
@@ -232,13 +232,13 @@ class PitchLineDetector:
                 angle1 = np.degrees(np.arctan2(y2_1 - y1_1, x2_1 - x1_1))
                 angle2 = np.degrees(np.arctan2(y2_2 - y1_2, x2_2 - x1_2))
                 if abs(abs(angle1 - angle2) - 90) < 10:
-                    intersection = self._line_intersection(line1, line2)
+                    intersection = self._lines_intersection(line1, line2)
                     if intersection is not None:
                         x, y = intersection
                         cv2.circle(features_mask, (int(x), int(y)), 10, 255, -1)
         return features_mask
 
-    def _line_intersection(self, line1: List[int], line2: List[int]) -> Optional[Tuple[float, float]]:
+    def _lines_intersection(self, line1: List[int], line2: List[int]) -> Optional[Tuple[float, float]]:
         """
         Calculate the intersection point of two lines if it exists.
 

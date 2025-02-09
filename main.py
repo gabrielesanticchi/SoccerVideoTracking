@@ -1,197 +1,252 @@
+from typing import Dict, List, Optional, Tuple, Any
 import cv2
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+import yaml
+from dataclasses import dataclass
+from enum import Enum
 
-from config.configs_loader import ConfigurationLoader
-from src.trackers import Tracker, PitchLineDetector, CameraMovementEstimator
+from src.trackers import Tracker, CameraMovementEstimator
+from src.pitch.pitch_lines_detector import BasicPitchLineDetector
+from src.pitch.no_bells_just_whistles import NoBellsJustWhistles
 from src.utils import VideoIO
 from tests.debug_visualizer import DebugVisualizer
 
-class SoccerAnalysisPipeline:
-    """
-    Main pipeline for soccer video analysis combining player tracking,
-    pitch line detection, and camera movement estimation.
-    """
+@dataclass
+class VideoConfig:
+    frame_rate_reduction: int
+    resize_factor: float
+    target_width: int = 960
+    target_height: int = 480
+
+class ModelType(Enum):
+    BASIC = "basic"
+    NETWORK = "no_bells_just_whistles"
+
+class SoccerVideoProcessor:
+    """Process soccer videos with object tracking and pitch analysis."""
+    
     def __init__(self, config_path: str):
-        """
-        Initialize the analysis pipeline.
+        # Load config and initialize components
+        self.config = yaml.safe_load(open(config_path, 'r'))
+        self.video_config = VideoConfig(**self.config['input_video'])
         
-        Args:
-            config_path: Path to the configuration YAML filef
-        """
-        # Load configuration
-        self.config = ConfigurationLoader(config_path).load_config()
-        
-        # Initialize components
+        # Components will be initialized when processing starts
         self.tracker = None
         self.pitch_detector = None
         self.camera_estimator = None
         
-        # Debug visualization
-        self.debug_visualizer = DebugVisualizer()
+        # Setup debug output
+        self.debug = DebugVisualizer()
         self.output_dir = Path("debug_output")
         self.output_dir.mkdir(exist_ok=True)
-        
-    def initialize_components(self, first_frame: np.ndarray) -> None:
-        """
-        Initialize analysis components with the first frame.
-        
-        Args:
-            first_frame: First frame of the video
-        """
-        # Initialize object tracker
-        self.tracker = Tracker(
-            model_path='models/best.pt',
-            stub_path=f'stubs/{self.video_name}_track_stubs.pkl'
-        )
-        
-        # Initialize pitch line detector
-        self.pitch_detector = PitchLineDetector(
-            config=self.config['pitch_line_detector']
-        )
-        
-        # Initialize camera movement estimator with first frame
-        self.camera_estimator = CameraMovementEstimator(
-            frame=first_frame,
-            video_filename=self.video_name,
-            config=self.config['camera_movement'], 
-        )
-        
-        # Get features mask from pitch detector to help with tracking
-        first_frame_mask = self.pitch_detector.get_features_mask(first_frame)
-        self.camera_estimator.features['mask'] = first_frame_mask
 
-    def process_video(self, video_path: str) -> Dict:
-        """
-        Process a soccer video through the complete analysis pipeline.
+    def load_video(self, video_path: str) -> Tuple[List[np.ndarray], dict]:
+        """Load and prepare video frames for processing."""
+        print("Loading video...")
         
-        Args:
-            video_path: Path to the input video file
+        # Get video properties
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError(f"Failed to open video: {video_path}")
             
-        Returns:
-            Dictionary containing analysis results
-        """
-        self.video_name = Path(video_path).stem
+        props = {
+            'fps': cap.get(cv2.CAP_PROP_FPS),
+            'frame_count': int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+            'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        }
+        cap.release()
         
-        # Read video frames with specified frame rate reduction
-        print("Reading video frames...")
+        # Read frames with specified reduction
         frames = VideoIO.read_video(
             video_path,
-            frame_rate_reduction=self.config['input_video']['frame_rate_reduction'],
-            resize_factor=self.config['input_video']['resize_factor']
+            frame_rate_reduction=self.video_config.frame_rate_reduction,
+            resize_factor=self.video_config.resize_factor
         )
         
-        # Initialize components with first frame
-        print("Initializing analysis components...")
-        self.initialize_components(frames[0])
+        return frames, props
+
+    def preprocess_frames(self, frames: List[np.ndarray]) -> List[np.ndarray]:
+        """Preprocess frames to standard size and format."""
+        processed = []
+        for frame in frames:
+            if frame.shape[:2] != (self.video_config.target_height, self.video_config.target_width):
+                frame = cv2.resize(frame, (self.video_config.target_width, 
+                                         self.video_config.target_height))
+            processed.append(frame)
+        return processed
+
+    def setup_models(self, first_frame: np.ndarray, video_name: str):
+        """Initialize all detection and tracking models."""
+        print("Setting up models...")
         
-        # Process each frame
-        print("Processing frames...")
-        results = self._process_frames(frames)
+        # Initialize tracker
+        self.tracker = Tracker(
+            model_path=self.config['tracker']['model_path'],
+            stub_path=self.config['tracker']['stub_path'],
+        )
         
-        # Generate debug visualizations
-        if self.config['camera_movement']['save_visualization']:
-            print("... Generating debug visualizations...")
-            self._generate_debug_visualizations(frames, results)
+        # Initialize pitch detector based on config type
+        model_type = ModelType(self.config['pitch_lines_detection']['model'])
+        pitch_config = self.config['pitch_lines_detection']
+        if model_type == ModelType.BASIC:
+            self.pitch_detector = BasicPitchLineDetector(
+                pitch_config['basic']
+            )
+
+        else:
+            self.pitch_detector = NoBellsJustWhistles(
+                pitch_config['no_bells_just_whistles'],
+                self.config['device'],
+            )
         
-        return results
-    
-    def _process_frames(self, frames: List[np.ndarray]) -> Dict:
-        """
-        Process all frames through each analysis component.
+        # Initialize camera movement estimation
+        self.camera_estimator = CameraMovementEstimator(
+            frame=first_frame,
+            video_filename=video_name,
+            config=self.config['camera_movement']
+        )
         
-        Args:
-            frames: List of video frames
-            
-        Returns:
-            Dictionary containing results from each component
-        """
-        # Get object tracks (players, ball, referees)
+        # Set initial pitch estimation
+        if model_type == ModelType.BASIC:
+            mask = self.pitch_detector.get_features_mask(first_frame)
+            self.camera_estimator.features['mask'] = mask
+        else:
+            self.pitch_detector.inference(first_frame)
+            self.camera_estimator.features['mask'] = None
+
+    def detect_objects(self, frames: List[np.ndarray], video_name: str) -> Dict:
+        """Detect and track players, referees, and ball."""
+        print("... Detecting objects")
+        
+        # Generate stub path based on video config
+        stub_path = (f"stubs/{video_name}_track_stubs_"
+                    f"{self.video_config.frame_rate_reduction}_"
+                    f"{self.video_config.resize_factor}.pkl")
+        
+        # Get tracks and add positions
         tracks = self.tracker.get_object_tracks(
             frames,
             read_from_stub=True,
-            stub_path=f"stubs/{self.video_name}_track_stubs_{self.config['input_video']['frame_rate_reduction']}_{self.config['input_video']['resize_factor']}.pkl"
+            stub_path=stub_path
         )
         self.tracker.add_position_to_tracks(tracks)
         
-        # # Process pitch lines for each frame
+        return tracks
+
+    def detect_pitch_lines(self, frames: List[np.ndarray]) -> Tuple[List, List]:
+        """Analyze pitch lines and camera movement."""
+        print("... Analyzing pitch")
+        
         pitch_lines = []
+        calibration_params = []
+        
         for frame in frames:
-            line_mask = self.pitch_detector.create_line_mask(frame)
-            pitch_lines.append(line_mask)
+            if isinstance(self.pitch_detector, NoBellsJustWhistles):
+                # Network-based detection with calibration
+                kp_dict = self.pitch_detector.inference(frame)
+                pitch_lines.append(kp_dict)
+                # calibration_params.append(params)
+            else:
+                # Basic line detection
+                lines_mask = self.pitch_detector.create_lines_mask(frame)
+                pitch_lines.append(lines_mask)
+                
+        return pitch_lines, calibration_params
+
+    def estimate_camera(self, frames: List[np.ndarray]) -> Dict:
+        """Estimate camera movement between frames."""
+        print("Estimating camera movement...")
+        return self.camera_estimator.get_camera_movement(frames)
+
+    def create_visualizations(self, 
+                            frames: List[np.ndarray], 
+                            results: Dict,
+                            video_name: str):
+        """Generate debug visualizations if enabled."""
+        if not self.config['camera_movement']['save_visualization']:
+            return
             
-        # Estimate camera movement
-        camera_movement = self.camera_estimator.get_camera_movement(frames)
+        print("Generating visualizations...")
         
-        return {
-            'tracks': tracks,
-            'pitch_lines': pitch_lines,
-            # 'pitch_lines': [],
-            'camera_movement': camera_movement
-        }
-    
-    def _generate_debug_visualizations(
-        self,
-        frames: List[np.ndarray],
-        results: Dict
-    ) -> None:
-        """
-        Generate and save debug visualizations.
-        
-        Args:
-            frames: Original video frames
-            results: Analysis results dictionary
-        """
-        # Generate pitch line visualization
-        pitch_vis_frames = []
-        for frame, line_mask in zip(frames, results['pitch_lines']):
-            combined = self.debug_visualizer.create_side_by_side(
-                frame, 
-                line_mask,
-                titles=("Original Frame", "Detected Lines")
+        # Pitch lines visualization
+        pitch_frames = []
+        for frame, mask in zip(frames, results['pitch_lines']):
+            combined = self.debug.create_side_by_side(
+                frame, mask,
+                titles=("Original", "Pitch Lines")
             )
-            pitch_vis_frames.append(combined)
+            pitch_frames.append(combined)
             
-        # Save pitch line visualization
         VideoIO.save_media(
-            pitch_vis_frames,
-            self.output_dir / f"{self.video_name}_pitch_lines", fps=30, duration=100, formats=['gif']
+            pitch_frames,
+            self.output_dir / f"{video_name}_pitch_lines",
+            fps=30,
+            duration=100,
+            formats=['gif']
         )
         
-        
-        # Generate camera movement visualization
+        # Camera movement visualization
         movement_frames = self.camera_estimator.draw_camera_movement(
             frames, 
             results['camera_movement']
         )
         
-        camera_vis_frames = []
+        camera_frames = []
         for frame, mov_frame in zip(frames, movement_frames):
-            combined = self.debug_visualizer.create_side_by_side(
-                frame,
-                mov_frame,
-                titles=("Original Frame", "Camera Movement")
+            combined = self.debug.create_side_by_side(
+                frame, mov_frame,
+                titles=("Original", "Camera Movement")
             )
-            camera_vis_frames.append(combined)
+            camera_frames.append(combined)
             
-        # Save camera movement visualization
         VideoIO.save_media(
-            camera_vis_frames,
-            self.output_dir / f"{self.video_name}_camera_movement", fps=30, duration=100, formats=['gif']
+            camera_frames,
+            self.output_dir / f"{video_name}_camera_movement",
+            fps=30,
+            duration=100,
+            formats=['gif']
         )
+
+    def process_video(self, video_path: str) -> Dict:
+        """Main processing pipeline for soccer video analysis."""
+        video_name = Path(video_path).stem
         
+        # 1. Load and preprocess video
+        frames, props = self.load_video(video_path)
+        frames = self.preprocess_frames(frames)
+        
+        # 2. Initialize models
+        self.setup_models(frames[0], video_name)
+        
+        # 3. Process frames
+        results = {}
+        
+        # 4. Object detection and tracking
+        results['tracks'] = self.detect_objects(frames, video_name)
+        
+        # 5. Pitch analysis
+        pitch_lines, calibration = self.detect_pitch_lines(frames)
+        results['pitch_lines'] = pitch_lines
+        if calibration:
+            results['calibration'] = calibration
+            
+        # 6. Camera movement estimation
+        # results['camera_movement'] = self.estimate_camera(frames)
+        
+        # 7. Generate visualizations
+        # self.create_visualizations(frames, results, video_name)
+        
+        return results
 
 def main():
-    """Main entry point for the soccer analysis pipeline."""
     # Initialize and run pipeline
-    pipeline = SoccerAnalysisPipeline('config/config.yaml')
-    
-    # Process video
-    video_path = 'input_videos/08fd33_4.mp4'
-    results = pipeline.process_video(video_path)
-    
-    print("Analysis complete! Debug visualizations saved to debug_output/")
+    processor = SoccerVideoProcessor('config/config.yaml')
+    results = processor.process_video('input_videos/iniesta_sample.mp4')
+    print("Processing complete! Check debug_output/ for visualizations.")
+        # len(results['tracks']['players']) --> N frames
+        # len(results['pitch_lines'])       --> N frames
 
 if __name__ == "__main__":
     main()

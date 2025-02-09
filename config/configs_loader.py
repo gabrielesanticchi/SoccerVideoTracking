@@ -67,12 +67,12 @@ def create_example_config(output_path: str) -> None:
                 'save_visualization': True  # Save visualization results
             }
         },
-        'pitch_line_detector': {
+        'pitch_lines_detector': {
             'canny_low': 50,             # Canny edge detection low threshold
             'canny_high': 150,           # Canny edge detection high threshold
             'hough_threshold': 50,       # Hough transform threshold
-            'min_line_length': 100,      # Minimum line length for Hough transform
-            'max_line_gap': 10,          # Maximum gap between lines for Hough transform
+            'min_lines_length': 100,      # Minimum line length for Hough transform
+            'max_lines_gap': 10,          # Maximum gap between lines for Hough transform
             'binary_threshold': 200      # Binary threshold for white line detection
         }
     }

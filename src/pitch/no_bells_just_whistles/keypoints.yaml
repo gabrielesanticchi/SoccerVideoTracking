@@ -1,0 +1,78 @@
+
+
+# This dictionary is used to define the pitch keypoints and lines
+# for the pitch line detector.
+lines_list:
+- "Big rect. left bottom"
+- "Big rect. left main"
+- "Big rect. left top" 
+- "Big rect. right bottom"
+- "Big rect. right main"
+- "Big rect. right top"
+- "Goal left crossbar"
+- "Goal left post left"
+- "Goal left post right"
+- "Goal right crossbar"
+- "Goal right post left"
+- "Goal right post right"
+- "Middle line"
+- "Side line bottom"
+- "Side line left"
+- "Side line right"
+- "Side line top"
+- "Small rect. left bottom"
+- "Small rect. left main"
+- "Small rect. left top"
+- "Small rect. right bottom"
+- "Small rect. right main"
+- "Small rect. right top"
+
+keypoints_lines_list:
+- ["Side line top", "Side line left"]
+- ["Side line top", "Middle line"]
+- ["Side line right", "Side line top"]
+- ["Side line left", "Big rect. left top"]
+- ["Big rect. left top", "Big rect. left main"]
+- ["Big rect. right top", "Big rect. right main"]
+- ["Side line right", "Big rect. right top"]
+- ["Side line left", "Small rect. left top"]
+- ["Small rect. left top", "Small rect. left main"]
+- ["Small rect. right top", "Small rect. right main"]
+- ["Side line right", "Small rect. right top"]
+- ["Goal left crossbar", "Goal left post right"]
+- ["Side line left", "Goal left post right"]
+- ["Side line right", "Goal right post left"]
+- ["Goal right crossbar", "Goal right post left"]
+- ["Goal left crossbar", "Goal left post left"]
+- ["Side line left", "Goal left post left"]
+- ["Side line right", "Goal right post right"]
+- ["Goal right crossbar", "Goal right post right"]
+- ["Side line left", "Small rect. left bottom"]
+- ["Small rect. left bottom", "Small rect. left main"]
+- ["Small rect. right bottom", "Small rect. right main"]
+- ["Side line right", "Small rect. right bottom"]
+- ["Side line left", "Big rect. left bottom"]
+- ["Big rect. left bottom", "Big rect. left main"]
+- ["Big rect. right main", "Big rect. right bottom"]
+- ["Side line right", "Big rect. right bottom"]
+- ["Side line left", "Side line bottom"]
+- ["Side line bottom", "Middle line"]
+- ["Side line bottom", "Side line right"]
+
+keypoint_aux_pair_list:
+- ["Small rect. left main", "Side line top"]
+- ["Big rect. left main", "Side line top"]
+- ["Big rect. right main", "Side line top"]
+- ["Small rect. right main", "Side line top"]
+- ["Small rect. left main", "Big rect. left top"]
+- ["Big rect. right top", "Small rect. right main"]
+- ["Small rect. left top", "Big rect. left main"]
+- ["Small rect. right top", "Big rect. right main"]
+- ["Small rect. left bottom", "Big rect. left main"]
+- ["Small rect. right bottom", "Big rect. right main"]
+- ["Small rect. left main", "Big rect. left bottom"]
+- ["Small rect. right main", "Big rect. right bottom"]
+- ["Small rect. left main", "Side line bottom"]
+- ["Big rect. left main", "Side line bottom"]
+- ["Big rect. right main", "Side line bottom"]
+- ["Small rect. right main", "Side line bottom"]
